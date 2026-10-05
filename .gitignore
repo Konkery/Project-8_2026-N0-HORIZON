@@ -1,0 +1,66 @@
+# Временное исключение из синхронизации
+*.drawio
+
+# VS Code workspace
+*.code-workspace
+
+# Gemini environment variable file
+*.env
+
+# CAD files
+*.dwg
+
+# MDB files
+*.mdb
+
+# DAT files
+*.dat
+
+# BAK files
+*.bak
+
+# Images - common formats
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.gif
+*.tiff
+*.tif
+*.webp
+*.heic
+*.heif
+*.raw
+*.cr2
+*.nef
+*.arw
+*.dng
+*.psd
+*.svg
+
+# Video - common formats
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.wmv
+*.mpg
+*.mpeg
+*.m4v
+*.webm
+*.flv
+*.3gp
+*.mts
+*.m2ts
+
+# Optional useful ignores
+.*/
+00__raw/
+temp*/
+temp*
+.vscode/
+node_modules/
+Thumbs.db
+
+
+!.gitignore
