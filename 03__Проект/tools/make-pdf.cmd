@@ -2,11 +2,11 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 if "%~1"=="" (
-    echo [make-pdf] авторежим: поиск отчета и вшивка закладок...
-    python pdf_add_bookmarks.py
+    echo [make-pdf] full pipeline: md -^> HTML -^> PDF -^> bookmarks...
+    python md_to_pdf.py
     echo.
-    echo [make-pdf] готово. Закройте PDF-ридер перед следующим прогоном, если файл занят.
+    echo [make-pdf] done: 04__???????\pre-contract-negotiations.pdf
     pause
 ) else (
-    python pdf_add_bookmarks.py %*
+    python md_to_pdf.py %*
 )
