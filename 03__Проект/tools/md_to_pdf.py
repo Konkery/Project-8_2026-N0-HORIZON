@@ -26,7 +26,7 @@ MERMAID_CANDIDATES = [
 ]
 
 CSS = """
-@page { size: A4; margin: 14mm 13mm; }
+@page { size: A4; }
 html { -webkit-print-color-adjust: exact; }
 body {
   font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
@@ -217,6 +217,14 @@ def main() -> int:
             path=str(pdf_path),
             format="A4",
             print_background=True,
+            display_header_footer=True,
+            header_template="<span></span>",
+            footer_template=(
+                "<div style=\"width:100%;text-align:center;"
+                "font-family:'Segoe UI',Arial,sans-serif;font-size:9px;color:#6b7280;\">"
+                "стр. <span class=\"pageNumber\"></span> / <span class=\"totalPages\"></span></div>"
+            ),
+            margin={"top": "14mm", "bottom": "16mm", "left": "13mm", "right": "13mm"},
         )
         browser.close()
     print(f"pdf: {pdf_path.name}")

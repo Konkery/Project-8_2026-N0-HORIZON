@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import NameObject
 
 REPORT_STEM = "pre-contract-negotiations"
 SCRIPT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -126,6 +127,7 @@ def build_output(pdf_path, mapping, out_path):
         stack[level] = ref
         for deeper in [k for k in stack if k > level]:
             del stack[deeper]
+    writer.root_object[NameObject("/PageMode")] = NameObject("/UseOutlines")
     out_path = Path(out_path)
     if out_path.resolve() == Path(pdf_path).resolve():
         fd, tmp = tempfile.mkstemp(suffix=".pdf", dir=str(out_path.parent))
