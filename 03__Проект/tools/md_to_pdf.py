@@ -12,8 +12,21 @@ from playwright.sync_api import sync_playwright
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-DEFAULT_MD = PROJECT_ROOT / "04__Договор" / "pre-contract-negotiations.md"
+REPORT_STEM = "pre-contract-negotiations"
 BOOKMARKS = SCRIPT_DIR / "pdf_add_bookmarks.py"
+
+
+def find_default(ext: str):
+    preferred = PROJECT_ROOT / "04__Договор" / f"{REPORT_STEM}{ext}"
+    if preferred.is_file():
+        return preferred
+    matches = [
+        p for p in PROJECT_ROOT.rglob(f"{REPORT_STEM}{ext}")
+        if ".git" not in p.parts and "node_modules" not in p.parts
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda p: p.stat().st_mtime)
 MERMAID_CANDIDATES = [
     Path(os.path.expandvars(r"%USERPROFILE%"))
     / ".vscode"
@@ -208,19 +221,73 @@ def build_html(body: str, mermaid_src: str, title: str) -> str:
 </html>"""
 
 
+EPILOG = """\
+Workflow (после каждого изменения .md):
+  1) отредактировать md (разрывы страниц — маркер <!-- pagebreak --> отдельной
+     строкой с пустыми строками до и после);
+  2) запустить: двойной клик make-pdf.cmd или python md_to_pdf.py;
+  3) конвейер: md -> HTML (markdown-it) -> Edge headless (гейт «все mermaid
+     дорендерены») -> PDF A4 с нумерацией страниц -> закладки + PageMode.
+
+Примеры:
+  python md_to_pdf.py                        авторежим: находит отчет сам
+  python md_to_pdf.py файл.md файл.pdf      явные пути (ОБА аргумента обязательны)
+  python md_to_pdf.py -o выход.pdf           авторежим + сохранить в другой файл
+  python md_to_pdf.py --keep-html            оставить промежуточный HTML
+  python md_to_pdf.py -h                     эта справка
+
+Правила:
+  - заголовки h1-h4; {ignore=true} на строке заголовка исключает его из закладок;
+  - содержимое code-fence (``` и ~~~) не сканируется;
+  - страж целостности таблиц: несовпадение числа ячеек строки с шапкой ->
+    abort (exit 4) со списком строк-виновников, ДО генерации PDF;
+  - повторные прогоны идемпотентны: закладки заменяются целиком, не дублируются;
+  - PDF перезаписывается на месте (если не задан -o).
+"""
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(
-        description="Детерминированный конвейер md -> PDF (Playwright/Edge) + закладки.",
+        prog="md_to_pdf.py",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Детерминированный конвейер md -> PDF (Playwright/Edge): нумерация "
+                    "страниц, закладки, PageMode. Без аргументов — отчет находится автоматически.",
+        epilog=EPILOG,
     )
-    ap.add_argument("md", nargs="?", default=str(DEFAULT_MD), help="путь к markdown-отчёту")
-    ap.add_argument("pdf", nargs="?", default=None, help="куда сохранить PDF (по умолчанию — рядом с md)")
+    ap.add_argument(
+        "paths",
+        nargs="*",
+        metavar="MD|PDF",
+        help="пути к markdown-источнику и PDF; без аргументов — автоматический поиск отчета",
+    )
+    ap.add_argument("-o", "--out", default=None, help="куда сохранить PDF (по умолчанию — перезапись на месте)")
     ap.add_argument("--keep-html", action="store_true", help="не удалять промежуточный HTML")
     args = ap.parse_args()
 
-    md_path = Path(args.md).resolve()
-    pdf_path = Path(args.pdf).resolve() if args.pdf else md_path.with_suffix(".pdf")
+    if len(args.paths) == 0:
+        md_path = find_default(".md")
+        if md_path is None:
+            ap.error(f"автопоиск не нашел отчет (нужен '{REPORT_STEM}.md') — укажите пути явно")
+        pdf_found = find_default(".pdf")
+        pdf_path = pdf_found if pdf_found else md_path.with_suffix(".pdf")
+        print(f"AUTO md : {md_path}")
+        print(f"AUTO pdf: {pdf_path}")
+    elif len(args.paths) == 2:
+        md_path, pdf_path = map(Path, args.paths)
+    else:
+        ap.error("при явном указании путей нужны ОБА аргумента: сначала MD, затем PDF "
+                 "(или ни одного — тогда включается автопоиск)")
+
+    md_path = md_path.resolve()
+    pdf_path = pdf_path.resolve()
+    if args.out:
+        pdf_path = Path(args.out).resolve()
+    if not md_path.is_file():
+        ap.error(f"markdown не найден: {md_path}")
+    if not pdf_path.parent.is_dir():
+        ap.error(f"каталог назначения не существует: {pdf_path.parent}")
     mermaid_file = next((p for p in MERMAID_CANDIDATES if p.is_file()), None)
     if mermaid_file is None:
         mermaid_src = "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"
