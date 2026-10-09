@@ -107,6 +107,59 @@ def github_slug(text: str) -> str:
     return "".join(out)
 
 
+def check_tables(md_text: str, body_html: str):
+    problems = []
+    lines = md_text.splitlines()
+    fence = None
+    blocks = []
+    start = None
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        m = re.match(r"^(`{3,}|~{3,})", stripped)
+        if m:
+            marker = m.group(1)[0]
+            if fence is None:
+                fence = marker
+            elif stripped.startswith(marker * 3):
+                fence = None
+            continue
+        if fence:
+            continue
+        if stripped.startswith("|"):
+            if start is None:
+                start = i
+        elif start is not None:
+            blocks.append((start, i - 1))
+            start = None
+    if start is not None:
+        blocks.append((start, len(lines)))
+
+    def cells(row: str) -> int:
+        r = row.strip()
+        if r.startswith("|"):
+            r = r[1:]
+        if r.endswith("|"):
+            r = r[:-1]
+        return len(r.split("|"))
+
+    for s, e in blocks:
+        rows = lines[s - 1:e]
+        if len(rows) < 2:
+            problems.append(f"стр {s}: табличный блок из одной строки")
+            continue
+        if "-" not in rows[1] or not re.match(r"^\s*\|?[\s:|-]+\|?\s*$", rows[1]):
+            problems.append(f"стр {s + 1}: отсутствует строка-разделитель таблицы")
+            continue
+        n = cells(rows[0])
+        for k, row in enumerate(rows):
+            if cells(row) != n:
+                problems.append(f"стр {s + k}: ячеек {cells(row)}, ожидается {n} (как в шапке)")
+    n_html = body_html.count("<table>")
+    if len(blocks) != n_html:
+        problems.append(f"блоков таблиц в md: {len(blocks)}, распознано парсером: {n_html}")
+    return problems
+
+
 def md_to_html_body(md_text: str) -> str:
     import markdown_it
 
@@ -178,6 +231,13 @@ def main() -> int:
 
     md_text = md_path.read_text(encoding="utf-8")
     body = md_to_html_body(md_text)
+    problems = check_tables(md_text, body)
+    if problems:
+        print("ERROR: markdown-таблицы повреждены — парсер их не признаёт:")
+        for p in problems:
+            print("  ", p)
+        print("Исправьте исходник (число ячеек разделителя = шапке, пустые строки вокруг <!-- pagebreak -->) и повторите.")
+        return 4
     title_m = re.search(r"^#\s+(.+)$", md_text, flags=re.M)
     title = title_m.group(1).strip() if title_m else md_path.stem
     page = build_html(body, mermaid_src, title)
