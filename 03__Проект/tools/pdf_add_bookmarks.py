@@ -8,8 +8,44 @@ from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import NameObject
 
-REPORT_STEM = "pre-contract-negotiations"
 SCRIPT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Постоянное хранение отчёта (перенесён и переименован 14.10.2026, журнал 4.24):
+REPORT_DIR = SCRIPT_ROOT / "01__Документация" / "Протоколы" / "01__преддоговорные переговоры"
+REPORT_STEM = "01__Отчет-преддоговорные переговоры - 2.10.2026"
+REPORT_GLOB = "01__Отчет-преддоговорные переговоры*"   # захватывает pdf, переименованный пользователем («... от 2.10.2026.pdf»)
+LEGACY_STEMS = ("pre-contract-negotiations",)           # старые канонические имена (до 14.10.2026)
+
+def _repo_wide(pattern: str):
+    matches = []
+    for p in SCRIPT_ROOT.rglob(pattern):
+        if ".git" in p.parts or "node_modules" in p.parts:
+            continue
+        matches.append(p)
+    return matches
+
+
+def find_default(ext: str):
+    # 1) каноническая пара в постоянном хранении
+    preferred = REPORT_DIR / f"{REPORT_STEM}{ext}"
+    if preferred.is_file():
+        return preferred
+    # 2) переименованные копии того же документа в постоянном хранении (по mtime)
+    if REPORT_DIR.is_dir():
+        renamed = sorted(REPORT_DIR.glob(REPORT_GLOB + ext), key=lambda p: p.stat().st_mtime)
+        if renamed:
+            return renamed[-1]
+    # 3) наследие: старое расположение 04__Договор и старые имена
+    for stem in LEGACY_STEMS:
+        legacy = SCRIPT_ROOT / "04__Договор" / f"{stem}{ext}"
+        if legacy.is_file():
+            return legacy
+    matches = _repo_wide(REPORT_GLOB + ext)
+    for stem in LEGACY_STEMS:
+        matches += _repo_wide(f"{stem}{ext}")
+    if not matches:
+        return None
+    return max(matches, key=lambda p: p.stat().st_mtime)
 
 EPILOG = """\
 Workflow (после каждого экспорта MPE закладки затираются — их нужно вшивать заново):
@@ -147,7 +183,8 @@ def main():
         prog="pdf_add_bookmarks.py",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Вшивает в PDF дерево закладок (структуру документа) по заголовкам markdown-источника. "
-                    "Без аргументов — сам находит файл отчета (pre-contract-negotiations).",
+                    "Без аргументов — сам находит файл отчета в постоянном хранении "
+                    "(01__Документация\\Протоколы\\01__преддоговорные переговоры).",
         epilog=EPILOG,
     )
     ap.add_argument(

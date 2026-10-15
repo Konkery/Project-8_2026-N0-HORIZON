@@ -12,18 +12,38 @@ from playwright.sync_api import sync_playwright
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
-REPORT_STEM = "pre-contract-negotiations"
+# Постоянное хранение отчёта (перенесён и переименован 14.10.2026, журнал 4.24):
+REPORT_DIR = PROJECT_ROOT / "01__Документация" / "Протоколы" / "01__преддоговорные переговоры"
+REPORT_STEM = "01__Отчет-преддоговорные переговоры - 2.10.2026"
+REPORT_GLOB = "01__Отчет-преддоговорные переговоры*"   # захватывает pdf, переименованный пользователем («... от 2.10.2026.pdf»)
+LEGACY_STEMS = ("pre-contract-negotiations",)           # старые канонические имена (до 14.10.2026)
 BOOKMARKS = SCRIPT_DIR / "pdf_add_bookmarks.py"
+
+def _repo_wide(pattern: str):
+    return [
+        p for p in PROJECT_ROOT.rglob(pattern)
+        if ".git" not in p.parts and "node_modules" not in p.parts
+    ]
 
 
 def find_default(ext: str):
-    preferred = PROJECT_ROOT / "04__Договор" / f"{REPORT_STEM}{ext}"
+    # 1) каноническая пара в постоянном хранении
+    preferred = REPORT_DIR / f"{REPORT_STEM}{ext}"
     if preferred.is_file():
         return preferred
-    matches = [
-        p for p in PROJECT_ROOT.rglob(f"{REPORT_STEM}{ext}")
-        if ".git" not in p.parts and "node_modules" not in p.parts
-    ]
+    # 2) переименованные копии того же документа в постоянном хранении (по mtime)
+    if REPORT_DIR.is_dir():
+        renamed = sorted(REPORT_DIR.glob(REPORT_GLOB + ext), key=lambda p: p.stat().st_mtime)
+        if renamed:
+            return renamed[-1]
+    # 3) наследие: старое расположение 04__Договор и старые имена
+    for stem in LEGACY_STEMS:
+        legacy = PROJECT_ROOT / "04__Договор" / f"{stem}{ext}"
+        if legacy.is_file():
+            return legacy
+    matches = _repo_wide(REPORT_GLOB + ext)
+    for stem in LEGACY_STEMS:
+        matches += _repo_wide(f"{stem}{ext}")
     if not matches:
         return None
     return max(matches, key=lambda p: p.stat().st_mtime)
